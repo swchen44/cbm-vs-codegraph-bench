@@ -1,0 +1,6 @@
+repos/
+results/raw/
+node_modules/
+*.db
+*.db-wal
+*.db-shm
