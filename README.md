@@ -4,9 +4,11 @@
 題目為 **wpa_supplicant**（函式指標分派表 + 條件編譯極密集的真實 C 專案）。
 
 ## 核心結論
-- **函式指標分派**（`drv->ops->scan()`）：CodeGraph 合成器召回 **3/5**，cbm **0/5** → wpa 類 C 用 CodeGraph。
-- **巨集 / Cypher 查詢 / 索引速度**：cbm 勝（3,395 Macro 節點、openCypher、4.2s vs 14s）。
-- 兩者**互補**。完整分析見 [`REPORT.md`](REPORT.md)。
+- **★ 呼叫關係（誰呼叫誰）**：CodeGraph 壓倒性勝——直接呼叫圖召回 **93% vs 0%**；cbm 的 CALLS 邊 99% 掛在「檔案」而非「函式」（函式級僅 1%）。
+- **函式指標分派**（`drv->ops->scan()`）：CodeGraph 合成器召回 **3/5**，cbm **0/5**。
+- **基本建構召回**（struct/enum/function）：兩者皆 85–100%，平手。
+- **cbm 的強項**：巨集（3,395 Macro 節點）、openCypher 查詢、索引速度（4.2s vs 14s）。
+- 完整分析見 [`REPORT.md`](REPORT.md)、評分見 [`results/full/scorecard.md`](results/full/scorecard.md)。
 
 ## 重跑
 ```bash
