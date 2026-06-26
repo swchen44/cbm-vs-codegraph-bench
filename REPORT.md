@@ -228,6 +228,25 @@ flowchart LR
 - **C 函式級呼叫圖排序**：`clangd+compile_commands.json` > `codegraph` > `clangd 無 ccjson` > `cbm`。
 - 驅動 clangd 的腳本：`bench/clangd_callers.py`（LSP callHierarchy）。
 
+### 受控實驗：#ifdef + 巨集藏呼叫（`results/ctest/controlled.md`）
+手寫小專案 + compile_commands.json 有/無 `-DFEATURE_X`：
+- **#ifdef**：clangd 隨旗標翻轉（-D→feature_func、無→fallback_func）；**codegraph/cbm 永遠兩分支都收**（過度涵蓋）。→ compile_commands.json 的第二個決定性價值。
+- **巨集藏呼叫（內部函式）**：**cbm 的 simplecpp 有抓到**（codegraph 漏掉），但檔案級；**clangd 抓到且函式級**。
+
+### ★ 三引擎總表（C，全維度）
+| 維度 | cbm | codegraph | clangd + compile_commands.json（=Serena/mcp-cpp 引擎） |
+|------|-----|-----------|----------|
+| 函式級「誰呼叫誰」 | ❌ 檔案級(1%) | ✅ 直接呼叫常達標 | ✅✅ 最完整 |
+| 函式指標分派 | ❌ 0% | ⚠️ ~60%(合成) | ⚠️ 靜態追不到 runtime 指標 |
+| 巨集藏呼叫 | ⚠️ 抓到但檔案級 | ❌ 漏 | ✅ 抓到+函式級 |
+| #ifdef 精準（只看你的 config） | ❌ 全收 | ❌ 全收 | ✅ 隨 -D 翻轉 |
+| struct/enum/inline 清單 | ✅ | ✅ | ✅ |
+| macro 節點 | ✅ 獨有 | ❌ | （解析不建節點） |
+| Cypher 任意查詢 | ✅ 獨有 | ❌ | ❌ |
+| 索引速度/免 build | ✅ 快、免 build | ✅ 免 build | ❌ 需 compile_commands.json |
+
+**最終取捨**：要**最準的 C 語意（呼叫圖 + #ifdef + 巨集）** → clangd 系（Serena / mcp-cpp）+ `bear -- make` 產 compile_commands.json；要**免 build 夠用** → codegraph；要**巨集查詢 + Cypher + 速度** → cbm。
+
 ---
 
 ## 附錄：重跑方式
