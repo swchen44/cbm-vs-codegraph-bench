@@ -152,6 +152,8 @@ flowchart LR
 > **後果**：cbm 知道「**哪個檔案**呼叫了 Y」，但不知道「**哪個函式**呼叫了 Y」。所以對 cflow 的 28 條函式級真實呼叫邊，cbm 命中 **0/28**；CodeGraph **26/28 (93%)**。這才是先前所有 cbm 函式級查詢（Q1/Q2/callers/callees）全空的**根因**——不只是函式指標分派，連**一般直接呼叫**的「誰呼叫誰」cbm 在此 C 專案都答不出來。
 >
 > 注意：此為 `mode:full`、此 C 專案的實測行為；cbm 的 `trace_path`（原生工具）同樣回空，故非查詢寫法問題。
+>
+> **根因已查證（非我設定錯誤）**：`src/pipeline/pass_calls.c:320` 註解「Find source node for a call: enclosing function **or file node**」——cbm 設計上想掛 enclosing function，解析不到時 fallback 到 file 節點。C 有 99% fallback，代表 **C 的 enclosing-function 解析失敗**，是抽取層限制、**無使用者 flag 可改**。佐證：cbm 自家 `docs/BENCHMARK.md` 即記 `Q8 Inbound Trace | PARTIAL | 1/5`，且其 cross-file LSP 快速路徑只列 Python/TS/JS/TSX/PHP/C#（**C 不在內**）。
 
 ---
 
