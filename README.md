@@ -9,7 +9,9 @@
 - **基本建構召回**（struct/enum/function）：兩者皆 85–100%，平手。
 - **cbm 的強項**：巨集（3,395 Macro 節點）、openCypher 查詢、索引速度（4.2s vs 14s）。
 - **泛化驗證**：在 redis 上 cbm 呼叫圖更極端（0% 函式級）→ 檔案級限制非 wpa 特有（[`results/redis/generalization.md`](results/redis/generalization.md)）。
-- 完整分析見 [`REPORT.md`](REPORT.md)、評分見 [`results/full/scorecard.md`](results/full/scorecard.md)、**實用決策指南見 [`PLAYBOOK.md`](PLAYBOOK.md)**。
+- 完整分析見 [`REPORT.md`](REPORT.md)（含主比較大表、內網相依性、8 項 C 語法特性、傳統工具、索引時間）。
+- 架構/協定/Claude Code 對接見 [`ARCHITECTURE.md`](ARCHITECTURE.md)；實用決策指南見 [`PLAYBOOK.md`](PLAYBOOK.md)。
+- 詳細結果：`results/ctest8/features8.md`（8 特性）、`results/timing.md`（索引時間+傳統工具）、`results/redis/compile-commands-test.md`。
 
 ## 重跑
 ```bash

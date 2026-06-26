@@ -153,7 +153,12 @@ flowchart LR
 >
 > 注意：此為 `mode:full`、此 C 專案的實測行為；cbm 的 `trace_path`（原生工具）同樣回空，故非查詢寫法問題。
 >
-> **根因已查證（非我設定錯誤）**：`src/pipeline/pass_calls.c:320` 註解「Find source node for a call: enclosing function **or file node**」——cbm 設計上想掛 enclosing function，解析不到時 fallback 到 file 節點。C 有 99% fallback，代表 **C 的 enclosing-function 解析失敗**，是抽取層限制、**無使用者 flag 可改**。佐證：cbm 自家 `docs/BENCHMARK.md` 即記 `Q8 Inbound Trace | PARTIAL | 1/5`，且其 cross-file LSP 快速路徑只列 Python/TS/JS/TSX/PHP/C#（**C 不在內**）。
+> **根因已查證（不是故意設計，也不是為速度犧牲）**：sub-agent 深讀原始碼確認——
+> - **cbm 自己的註解承認**（`internal/cbm/cbm.c:718-724`）：*"some grammars (notably C, whose `function_definition` has no 'name' field) attribute the call's scope to the module rather than the function"*。
+> - 精確失敗點 `internal/cbm/helpers.c:741`：用 `ts_node_child_by_field_name(func_node,"name")` 取函式名，但 tree-sitter-c 的 `function_definition` **沒有 `name` 欄位**（名字埋在 declarator 鏈）→ 回 NULL → `helpers.c:766-767` fallback 成 `module_qn`（檔案）。
+> - **只有 C 退化**：逐一檢查 cbm 的 `internal/cbm/lsp/`，Python(`def`)/Go/TS/Java/Rust 都有明確函式名欄位 → **皆函式級**；唯獨 C 因文法無 name 欄位而退化。
+> - cbm README:541 明言要 "mirror IDE Go-to-Definition" 的精度、無任何「交給 LLM」敘述 → **不是故意檔案級**。速度來自「索引一次、查詢 sub-ms」架構，非犧牲圖粒度。
+> **結論：是 C 的 tree-sitter `function_definition` 無 name 欄位導致的抽取缺陷，非設計選擇、非速度取捨。** 佐證：cbm 自家 `docs/BENCHMARK.md` 記 `Q8 Inbound Trace | PARTIAL | 1/5`。
 
 ---
 
@@ -246,6 +251,71 @@ flowchart LR
 | 索引速度/免 build | ✅ 快、免 build | ✅ 免 build | ❌ 需 compile_commands.json |
 
 **最終取捨**：要**最準的 C 語意（呼叫圖 + #ifdef + 巨集）** → clangd 系（Serena / mcp-cpp）+ `bear -- make` 產 compile_commands.json；要**免 build 夠用** → codegraph；要**巨集查詢 + Cypher + 速度** → cbm。
+
+---
+
+## 9. 內網 / Air-gapped 安裝相依性（★公司內網場景）
+
+公司內網需手動把套件複製進去 → **相依複雜度差異極大**。實測各工具足跡：
+
+| 工具 | 安裝足跡 | 離線/內網難度 | 說明 |
+|------|---------|--------------|------|
+| **cscope / ctags / cflow** | 單一小執行檔（KB 級） | 🟢 **最易** | 系統工具，多數 distro 內建或單檔複製；零外部相依 |
+| **cbm** | 1 個 257MB 靜態 binary | 🟡 中 | **build 相依全 vendored 在 repo（sqlite/tree-sitter/yyjson/zstd/mimalloc）→ build 過程不需網路**；只需系統 clang/gcc。複製 repo 進內網即可自 build。動態庫僅 libSystem/libc++/libz（libgit2 可選） |
+| **codegraph** | 1 個 188MB bundled（含 Node runtime） | 🟡 中 | 自帶 Node，單一 tarball；但官方 installer 從 GitHub releases 抓 → 內網要先把 tarball 帶進去。npm 路徑需 registry |
+| **clangd** | 1 個大 binary（~100-350MB） | 🟡 中 | LLVM 標準元件，單檔；但**還需 `bear`/CMake 在能編譯的機器產 compile_commands.json** |
+| **Serena** | ~**890 個 uv/pip 套件** + 自動下載 **348MB clangd** + language servers | 🔴 **最難** | 內網惡夢：要鏡像 PyPI 子集、預先放好 clangd 與各 language server binary。實測它啟動時自行下載 clangd_19.1.2 |
+
+> [!warning] 對內網的務實結論
+> - **最省事**：傳統工具（cscope/ctags/cflow）—— 單檔、零相依。
+> - **自包式 build 反而適合內網**：**cbm** 的 vendored 相依全在 repo，build 不需網路，產出單一 binary；這對 air-gapped 是優勢。
+> - **codegraph**：把那一個 188MB bundled tarball 帶進去即可，自包 Node。
+> - **Serena 最不適合內網**：~890 Python 套件 + 自動下載 clangd/語言伺服器，需大量手動鏡像。若要走 clangd 路線，**直接用 clangd 單一 binary + 自寫薄 MCP 包裝**比 Serena 輕得多。
+
+### Serena 實跑紀錄
+- **CLI 確認**：`serena {config,context,project,tools,start-mcp-server,...}`（有完整 CLI）。
+- **協定**：MCP（stdio / sse / streamable-http），工具如 `find_symbol`、`find_referencing_symbols`。
+- **C 引擎 = clangd**：實測它自動下載 `clangd_19.1.2` 到 `~/.serena/language_servers/`，故 **Serena 對 C 的結果 == 本報告 clangd+ccjson 欄**（已直接驗證：函式級、#ifdef、巨集、typedef、_Generic 全 ✅）。
+- MCP 端到端往返因相依重（uvx 解析 git + 下載 clangd + 索引）啟動成本高，本報告以直接驅動 clangd（`bench/clangd_callers.py`）取得其引擎的真實數據。
+
+---
+
+## 10. ★★ 主比較大表（全部項目，單一表）
+
+> 引擎縮寫：**cbm**｜**cg**=codegraph｜**clangd**=clangd+compile_commands.json(=Serena/mcp-cpp)｜**trad**=cscope/ctags/cflow
+
+| 維度 | cbm | cg | clangd | trad |
+|------|-----|-----|--------|------|
+| **— 呼叫關係 —** | | | | |
+| 函式級「誰呼叫誰」 | ❌ 檔案級(1%) | ✅ | ✅✅ | ✅(cscope) |
+| 跨檔呼叫圖 | ⚠️ | ✅ | ✅✅(需ccjson) | ✅(cscope) |
+| 函式指標分派(ops→handler) | ❌ | ⚠️60%合成 | ⚠️不猜runtime | ❌ |
+| callback(eloop 延遲呼叫) | ❌ | ⚠️僅註冊點 | ❌ | ❌ |
+| **— C 建構 —** | | | | |
+| struct/enum/inline 清單 | ✅ | ✅ | ✅ | ✅(ctags) |
+| 基本建構召回(redis) | 90-100% | 85-99% | ✅ | ✅ |
+| typedef 鏈間接呼叫 | ❌ | ❌ | ✅ | ❌ |
+| 巨集生成函式(X-macro) | ❌ | ❌ | ✅ | ❌ |
+| 巨集藏呼叫 | ⚠️檔案級抓到 | ❌ | ✅ | ❌ |
+| _Generic 型別分派 | ❌ | ❌ | ✅ | ❌ |
+| 跨檔 static 同名 | ✅2節點 | ✅2節點 | ✅ | ⚠️ |
+| forward decl 去重 | ✅ | ✅ | ✅ | ✅ |
+| macro 節點 | ✅獨有 | ❌ | (不建節點) | ✅(ctags 部分) |
+| #ifdef 精準(只看你config) | ❌全收 | ❌全收 | ✅隨-D翻轉 | ❌全收 |
+| **— 查詢/介面 —** | | | | |
+| Cypher 任意查詢 | ✅獨有 | ❌ | ❌ | ❌ |
+| MCP(給 agent) | ✅ | ✅ | ✅(Serena/mcp-cpp) | ❌需自包 |
+| **— 成本 —** | | | | |
+| 索引時間(wpa 620檔) | 4.2s | 14s | 需先編譯(分鐘) | 0.08s |
+| 索引時間(redis 216檔) | 3.8s | 11s | 同上 | 0.04-0.5s |
+| 需要 build/compile_commands | ❌ | ❌ | ✅必須 | ❌ |
+| **內網安裝難度** | 🟡自包build | 🟡單tarball | 🟡單binary+bear | 🟢最易/🔴Serena |
+
+**一句話總結**：
+- **最完整最準（含巨集/typedef/_Generic/#ifdef）** → clangd 系（Serena/mcp-cpp），代價是要 build + 內網相依重。
+- **免 build、直接呼叫夠用、要 fnptr 合成與 Cypher** → cg / cbm。
+- **內網、要快又準的直接呼叫圖** → **cscope**（CP 值意外最高）。
+- **cbm 的硬傷**：C 呼叫圖檔案級；**強項**：巨集節點 + Cypher + 自包 build 適合內網。
 
 ---
 
