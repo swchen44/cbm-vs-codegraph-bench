@@ -8,7 +8,8 @@
 - **函式指標分派**（`drv->ops->scan()`）：CodeGraph 合成器召回 **3/5**，cbm **0/5**。
 - **基本建構召回**（struct/enum/function）：兩者皆 85–100%，平手。
 - **cbm 的強項**：巨集（3,395 Macro 節點）、openCypher 查詢、索引速度（4.2s vs 14s）。
-- 完整分析見 [`REPORT.md`](REPORT.md)、評分見 [`results/full/scorecard.md`](results/full/scorecard.md)。
+- **泛化驗證**：在 redis 上 cbm 呼叫圖更極端（0% 函式級）→ 檔案級限制非 wpa 特有（[`results/redis/generalization.md`](results/redis/generalization.md)）。
+- 完整分析見 [`REPORT.md`](REPORT.md)、評分見 [`results/full/scorecard.md`](results/full/scorecard.md)、**實用決策指南見 [`PLAYBOOK.md`](PLAYBOOK.md)**。
 
 ## 重跑
 ```bash
