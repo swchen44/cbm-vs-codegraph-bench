@@ -204,6 +204,32 @@ flowchart LR
 
 ---
 
+## 8. 延伸：clangd / compile_commands.json 對照 + 工具生態
+
+### 同類工具生態（網路調查）
+| 類別 | 代表工具 | ⭐ | 基礎 |
+|------|---------|-----|------|
+| LSP+MCP（通用） | **Serena**（oraios/serena） | 25.8k | LSP（C/C++ 用 clangd） |
+| clangd MCP（專用 C/C++） | mpsm/mcp-cpp | 93 | clangd + compile_commands.json |
+| clangd MCP | felipeerias/clangd-mcp-server | 39 | clangd |
+| libclang MCP | kandrwmrtn/cplusplus_mcp | 29 | libclang |
+| tree-sitter 自建圖 | **codegraph / cbm**（本報告） | 53.7k / 73 | tree-sitter |
+
+→ Serena 星數最多但通用；C/C++ 專用且吃 compile_commands.json 的以 mcp-cpp 最高。
+
+### compile_commands.json 有/無 實測（redis + clangd，見 `results/redis/compile-commands-test.md`）
+| 函式 | clangd+ccjson | clangd 無ccjson | codegraph | cbm |
+|------|---------------|-----------------|-----------|-----|
+| lookupCommand | **13** | 3 | 13 | 0 |
+| lookupKeyRead | **45** | 3 | 20 | 0 |
+
+- **compile_commands.json 對 clangd 決定性**：沒有它，clangd 只剩同檔 callers（跨檔全失）。
+- **codegraph 免 build 卻有競爭力**：直接呼叫常與 clangd+ccjson 打平，重度呼叫漏約一半。
+- **C 函式級呼叫圖排序**：`clangd+compile_commands.json` > `codegraph` > `clangd 無 ccjson` > `cbm`。
+- 驅動 clangd 的腳本：`bench/clangd_callers.py`（LSP callHierarchy）。
+
+---
+
 ## 附錄：重跑方式
 ```bash
 ./setup.sh                              # 裝兩工具 + ground-truth 工具
