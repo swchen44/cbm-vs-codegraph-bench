@@ -115,6 +115,24 @@ flowchart LR
 
 ---
 
+### 3.4 基本建構抽取對照（struct / enum / inline / function / typedef）
+> 此節為回應「基本建構是否都比較過」而補測（`bench/basic.sh`）。原 Q1-Q6 聚焦難題，未涵蓋基礎建構正確性。
+
+| 建構 | cbm | CodeGraph | 評語 |
+|------|-----|-----------|------|
+| **function** | Function 9,125 | function 9,351 | ✅ 兩者近一致、皆可靠 |
+| **inline 函式**（取樣 20） | 19/20 | 20/20 | ✅ 兩者都把 `static inline` 正確當 function |
+| **enum 名** | Enum 336 | enum 408 | ✅ 都抽 |
+| **enumerator（enum 值）** | ❌ 無專屬（混入 Variable 2,710） | enum_member 3,244 | codegraph 有專屬節點；cbm 把 enum 值當變數 |
+| **struct** | Class 1,775（無 C Struct label，含重複/前向宣告而膨脹） | struct 706 | codegraph 較精確 |
+| **method** | 201 | 201 | 一致 |
+| **typedef** | ❌ 無 | type_alias 104 | codegraph 有，cbm 無 |
+| **macro** | Macro 3,395 | 0 | cbm 抽巨集 |
+
+**小結**：**基本 function 與 inline 兩者都可靠且近一致**；enum 名兩者都抽。差異在**型別建模精細度**——CodeGraph 把 struct / enum_member（enum 值）/ type_alias 都當獨立節點；cbm 較粗（struct 歸 Class、enum 值歸 Variable、無 typedef label），且有 **name 碰撞**（`wpa_supplicant` 同時是 struct/Folder/function，查詢須用 label 限定）。反過來 cbm 獨有 **3,395 Macro 節點**。
+
+---
+
 ## 4. 真實優缺點（實跑後，非文獻推論）
 
 ### CodeGraph
