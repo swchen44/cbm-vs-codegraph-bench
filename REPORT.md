@@ -319,6 +319,23 @@ flowchart LR
 
 ---
 
+## 11. ccq — 從 benchmark 長出的自製工具（`swchen44/ccq`）
+
+依本 benchmark 的結論（clangd 贏大部分維度、只輸 codegraph 的 fnptr F6）做出的工具：**ccq = clangd 引擎 + fnptr 啟發式 + 符號編輯 + warm daemon**，Go 零相依單一 binary。詳見 `results/ccq/ccq-bench.md`。
+
+| 維度 | cbm | codegraph | clangd | **ccq** |
+|------|-----|-----------|--------|---------|
+| 8 特性通過數 | 2 | 3 | 7 | **★8（唯一全過）** |
+| F6 函式指標分派 | ❌ | ✅ | ⚠️ | **✅（fnptr 啟發式）** |
+| redis callers 召回 | 0 | 13 | 13 | **13** |
+| 暖查詢速度 | 每次重跑 | 每次重跑 | — | **0.07–0.6s（daemon）** |
+| 編輯（rename） | ❌ | ❌ | — | **✅** |
+| 內網安裝 | 自包build | tarball | binary+bear | **Go 零相依單binary** |
+
+**ccq 是唯一 8 特性全過的工具**：拿下 clangd 的全部贏，再用 fnptr 啟發式補上 F6，warm daemon 給亞秒級速度（對標 cbm），rename 對標 Serena，零相依適合內網。
+
+---
+
 ## 附錄：重跑方式
 ```bash
 ./setup.sh                              # 裝兩工具 + ground-truth 工具

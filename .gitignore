@@ -4,3 +4,5 @@ node_modules/
 *.db
 *.db-wal
 *.db-shm
+repos/ctest/compile_commands.json
+repos/ctest8/compile_commands.json

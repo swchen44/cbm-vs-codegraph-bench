@@ -13,6 +13,9 @@
 - 架構/協定/Claude Code 對接見 [`ARCHITECTURE.md`](ARCHITECTURE.md)；實用決策指南見 [`PLAYBOOK.md`](PLAYBOOK.md)。
 - 詳細結果：`results/ctest8/features8.md`（8 特性）、`results/timing.md`（索引時間+傳統工具）、`results/redis/compile-commands-test.md`。
 
+## 衍生工具
+依本 benchmark 結論做出的自製工具 **ccq**（clangd+fnptr啟發式+編輯+warm daemon，Go 零相依）→ `swchen44/ccq`；對照見 `results/ccq/ccq-bench.md`（8 特性唯一全過）。
+
 ## 重跑
 ```bash
 ./setup.sh                                       # 裝 codegraph(bundled) + build cbm + brew cscope/cflow
