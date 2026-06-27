@@ -38,6 +38,17 @@
 ## 編輯（Serena 對標）
 - `ccq rename t_add t_plus` → 7 edits / 6 檔（dry-run + `--apply`），跨檔安全改名 ✅。
 
+## v0.3 增強（向 codegraph/cbm 各取所長，全程零相依）
+
+| 增強 | 學自 | 結果（受控驗證） |
+|------|------|-----------------|
+| **fnptr 升級** | codegraph | (struct,field) 複合鍵 → **同名欄位不再跨 struct 污染**（io.read vs stream.read 驗證）；支援 **positional table** `{"add",cmd_add}`；**field←field 傳遞** `h->func=found->fn`。原 F6 仍過。 |
+| **無 build 模式** | cbm | `ccq init` 無 build 系統時產 `compile_flags.txt`（掃 -I）→ 無 compile_commands.json 也能**跨檔查詢**（驗證 callers t_add 回完整 7+fnptr）。**零新相依**（不引 tree-sitter）。 |
+| **巨集納入 search** | cbm | clangd kind 15 → 顯示 `macro`；`ccq search DEFINE_WRAPPER` 可列。 |
+| **graph export** | cbm（代替 Cypher） | `ccq export --format sql\|json`：符號+呼叫圖（calls 用 incomingCalls 建 + fnptr 邊）。`ccq export --format sql\|sqlite3 g.db` 後純 SQL 查（35 節點/20 邊驗證）。**不引 SQLite 相依**。 |
+
+> **取捨**：不做完整 Cypher 引擎（重造 cbm）、不做語意相似邊（破壞零相依、偏離定位）。export 給 80% 的查詢力、零成本。
+
 ## 結論
 ccq 在 benchmark 上**對齊或贏過** cbm/codegraph/clangd/Serena 的各自強項：
 - 函式級呼叫圖 = clangd/codegraph（贏 cbm）
