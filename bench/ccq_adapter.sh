@@ -15,6 +15,12 @@ source "$(dirname "$0")/lib.sh"
 REPO="$(cd "${1:?repo}" && pwd)"; NICK="${2:?nick}"
 OUT="$ROOT/results/$NICK"; RAW="$ROOT/results/raw/$NICK"; mkdir -p "$OUT" "$RAW"
 
+# Ground truth is per-repo. Defaults target wpa_supplicant; override for others.
+#   CG_GT    — 3 self-contained files for the cflow call-graph GT (repo-relative)
+#   FNPTR_GT — fn-pointer handler names (set empty to skip the fnptr section)
+CG_GT="${CG_GT:-src/utils/eloop.c src/utils/common.c src/drivers/driver_common.c}"
+FNPTR_GT="${FNPTR_GT-driver_nl80211_scan2 wpa_driver_bsd_scan wpa_driver_ndis_scan wpa_driver_privsep_scan wpa_driver_wext_scan}"
+
 # --- build ccq (or use CCQ_BIN) ---
 CCQ_BIN="${CCQ_BIN:-}"
 if [ -z "$CCQ_BIN" ]; then
@@ -35,7 +41,8 @@ CCQ_M=$(awk '/maximum resident/{printf "%.0fMB",$1/1048576}' "$RAW/ccq-index.log
 if grep -q 'no-build' "$RAW/ccq-index.log"; then CCQ_MODE="no-build (compile_flags.txt)"; else CCQ_MODE="compile_commands"; fi
 
 # --- direct call-graph recall vs cflow (same GT as score.sh) ---
-cflow --depth=2 "$REPO/src/utils/eloop.c" "$REPO/src/utils/common.c" "$REPO/src/drivers/driver_common.c" 2>/dev/null > "$RAW/cflow.txt"
+GT_ARGS=(); for f in $CG_GT; do GT_ARGS+=("$REPO/$f"); done
+cflow --depth=2 "${GT_ARGS[@]}" 2>/dev/null > "$RAW/cflow.txt"
 
 # GT callees (internal), then query ccq callers for each and record hits.
 python3 - "$CCQ_BIN" "$REPO" "$RAW" <<'PY' > "$OUT/ccq-callgraph.tmp"
@@ -67,8 +74,7 @@ PY
 read CCQ_CG_HIT CCQ_CG_GT < "$OUT/ccq-callgraph.tmp" || true; rm -f "$OUT/ccq-callgraph.tmp"
 : "${CCQ_CG_HIT:=0}" "${CCQ_CG_GT:=0}"
 
-# --- fn-pointer .scan2 recall (5 wpa_driver_ops handlers) ---
-FNPTR_GT="driver_nl80211_scan2 wpa_driver_bsd_scan wpa_driver_ndis_scan wpa_driver_privsep_scan wpa_driver_wext_scan"
+# --- fn-pointer .scan2 recall (wpa_driver_ops handlers); skipped if FNPTR_GT empty ---
 fn_hit=0; fn_n=0
 for h in $FNPTR_GT; do
   fn_n=$((fn_n+1))
@@ -81,25 +87,26 @@ pkill -f clangd 2>/dev/null
 # --- scorecard ---
 cg_pct=$(python3 -c "print(f'{100*$CCQ_CG_HIT/$CCQ_CG_GT:.0f}' if $CCQ_CG_GT else '0')")
 fn_pct=$(python3 -c "print(f'{100*$fn_hit/$fn_n:.0f}' if $fn_n else '0')")
+CCQ_LABEL="ccq (${CCQ_MODE%% *})" # ccq (no-build) | ccq (compile_commands)
 {
   echo "# ccq scorecard — $NICK (vs the same neutral ground truth)"
   echo
   echo "> ccq $("$CCQ_BIN" version 2>/dev/null) | mode: $CCQ_MODE | index $CCQ_T / RAM $CCQ_M"
   echo
-  echo "## 1. 直接呼叫圖召回 (vs cflow, 3 檔) — 對照 cbm 0% / CodeGraph 93%"
+  echo "## 1. 直接呼叫圖召回 (vs cflow) — 對照 cbm / CodeGraph 見 REPORT"
   echo "| 工具 | 命中/GT | 召回 |"
   echo "|---|---|---|"
-  echo "| **ccq** | **$CCQ_CG_HIT/$CCQ_CG_GT** | **${cg_pct}%** |"
-  echo "| CodeGraph | 26/28 | 93% (REPORT) |"
-  echo "| cbm | 0/28 | 0% (REPORT) |"
+  echo "| **$CCQ_LABEL** | **$CCQ_CG_HIT/$CCQ_CG_GT** | **${cg_pct}%** |"
   echo
-  echo "## 2. 函式指標 .scan2 分派召回 — 對照 cbm 0/5 / CodeGraph 3/5"
-  echo "| 工具 | 命中/GT | 召回 |"
-  echo "|---|---|---|"
-  echo "| **ccq** | **$fn_hit/$fn_n** | **${fn_pct}%** |"
-  echo "| CodeGraph | 3/5 | 60% (REPORT) |"
-  echo "| cbm | 0/5 | 0% (REPORT) |"
-  echo
+  if [ "$fn_n" -gt 0 ]; then
+    echo "## 2. 函式指標 .scan2 分派召回 — 對照 cbm 0/5 / CodeGraph 3/5"
+    echo "| 工具 | 命中/GT | 召回 |"
+    echo "|---|---|---|"
+    echo "| **$CCQ_LABEL** | **$fn_hit/$fn_n** | **${fn_pct}%** |"
+    echo "| CodeGraph | 3/5 | 60% (REPORT) |"
+    echo "| cbm | 0/5 | 0% (REPORT) |"
+    echo
+  fi
   echo "## 3. 呼叫邊粒度"
   echo "- ccq: **100% 函式級**（所有 CALLS 邊來自 clangd incomingCalls，天生 function→function）— 對照 cbm 1.0% / CodeGraph 100%。"
   echo

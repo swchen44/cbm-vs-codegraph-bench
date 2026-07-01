@@ -1,18 +1,16 @@
 # ccq scorecard — wpa (vs the same neutral ground truth)
 
-> ccq ccq 0.6.4 | mode: no-build (compile_flags.txt) | index 22.91s / RAM 6MB
+> ccq ccq 0.6.4 | mode: no-build (compile_flags.txt) | index 22.28s / RAM 5MB
 
-## 1. 直接呼叫圖召回 (vs cflow, 3 檔) — 對照 cbm 0% / CodeGraph 93%
+## 1. 直接呼叫圖召回 (vs cflow) — 對照 cbm / CodeGraph 見 REPORT
 | 工具 | 命中/GT | 召回 |
 |---|---|---|
-| **ccq** | **27/28** | **96%** |
-| CodeGraph | 26/28 | 93% (REPORT) |
-| cbm | 0/28 | 0% (REPORT) |
+| **ccq (no-build)** | **27/28** | **96%** |
 
 ## 2. 函式指標 .scan2 分派召回 — 對照 cbm 0/5 / CodeGraph 3/5
 | 工具 | 命中/GT | 召回 |
 |---|---|---|
-| **ccq** | **5/5** | **100%** |
+| **ccq (no-build)** | **5/5** | **100%** |
 | CodeGraph | 3/5 | 60% (REPORT) |
 | cbm | 0/5 | 0% (REPORT) |
 

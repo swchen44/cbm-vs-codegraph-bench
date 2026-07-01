@@ -25,17 +25,32 @@
 
 ## 0.5 ccq（第三位選手，2026-07 加入）
 
-> 受測：`swchen44/ccq`（Go + clangd + 函式指標合成器，pure-Go 零依賴）。以同一份中立 ground truth 評分（`bench/ccq_adapter.sh`，可複現；raw 在 `results/wpa/ccq-scorecard.md`）。
+> 受測：`swchen44/ccq`（Go + clangd + 函式指標合成器，pure-Go 零依賴）。以同一份中立 ground truth 評分（`bench/ccq_adapter.sh`，可複現）。**多數 C 專案沒有 `compile_commands.json`（約 80%），所以以下主打 no-build 模式**——ccq 在 no-build 就已勝出；有 build DB（約 20%）時再多一層精度。
 
-| 維度 | **ccq** | CodeGraph | cbm |
+### (a) no-build 模式（80% 場景）— wpa_supplicant，`ccq init` 自動產 `compile_flags.txt`
+raw：`results/wpa/ccq-scorecard.md`
+
+| 維度 | **ccq (no-build)** | CodeGraph | cbm |
 |---|---|---|---|
 | **直接呼叫圖召回**（vs cflow, 3 檔） | **27/28 (96%)** | 26/28 (93%) | 0/28 (0%) |
 | **函式指標 `.scan2` 分派召回** | **5/5 (100%)** | 3/5 (60%) | 0/5 (0%) |
 | 呼叫邊粒度（函式級佔比） | **100%** | 100% | 1.0% |
-| 索引耗時（wpa 620 檔） | 22.9s（no-build, clangd） | 14.0s | 4.2s |
-| 需不需 build | 需 `compile_flags.txt`（`ccq init` 自動產）或 `compile_commands.json` | 免 | 免 |
+| 索引耗時（620 檔） | 22.9s | 14.0s | 4.2s |
 
-**結論**：ccq 在「呼叫關係」這一維**同時勝過** CodeGraph 與 cbm——**函式指標召回 5/5（唯一全中；靠 clangd 之外的純文字 #ifdef-blind 合成，連 CodeGraph 漏掉的 bsd/ndis 平台 driver 都抓到）**，直接呼叫圖 96% 也略高於 CodeGraph（clangd call hierarchy，天生函式級）。**代價**：需要 `compile_flags.txt`（一鍵 `ccq init` 自動產）且索引較慢（clangd 走真 TU）。取捨很清楚：**要「誰呼叫誰 / 函式指標分派」的精度就用 ccq；要零 setup 的廣度/巨集/Cypher/UI 就用 cbm/CodeGraph**。
+**重點**：這些勝出數字是在 **no-build（無 build DB）** 下取得的——即多數人實際會遇到的場景。**函式指標召回 5/5 與 clangd 模式無關**（fnptr 是純文字、#ifdef-blind 的合成，連 CodeGraph 漏掉、藏在 `#ifdef` 平台條件內的 bsd/ndis driver 都抓到）；直接呼叫圖 96% 也顯示 no-build 的 clangd 已能解析核心跨檔呼叫。
+
+### (b) compile_commands 模式（20% 場景）— redis，用其真實 `compile_commands.json`
+raw：`results/redis/ccq-scorecard.md`
+
+| 維度 | **ccq (compile_commands)** |
+|---|---|
+| 直接呼叫圖召回（vs cflow, redis util/sds/adlist 3 檔） | **47/73 (64%)** |
+| 呼叫邊粒度 | 100% 函式級 |
+| 索引耗時（792 檔） | 8.9s |
+
+> 這是**不同 repo/不同 GT**（redis 巨集/靜態函式較多），所以 64% 對 96% 反映的是 repo 差異，不是「模式差異」。列此僅示範 ccq 在有真實 build DB 時同樣運作（且仍遠勝 cbm 的 0%）。要嚴格隔離「no-build vs compile_commands」需同一 repo 兩模式——但 redis 有 Makefile，`ccq init` 會 bear+make 直接產 build DB，難以強制 no-build，故從缺。
+
+**結論**：ccq 在「呼叫關係」這一維**同時勝過** CodeGraph 與 cbm，而且**在最常見的 no-build 場景就已勝出**（fnptr 5/5、呼叫圖 96%）。**代價**：需要 `compile_flags.txt`（一鍵 `ccq init` 自動產）且索引較慢（clangd 走真 TU）。取捨很清楚：**要「誰呼叫誰 / 函式指標分派」的精度就用 ccq；要零 setup 的廣度/巨集/Cypher/UI 就用 cbm/CodeGraph**。
 
 ---
 
