@@ -23,6 +23,22 @@
 
 ---
 
+## 0.5 ccq（第三位選手，2026-07 加入）
+
+> 受測：`swchen44/ccq`（Go + clangd + 函式指標合成器，pure-Go 零依賴）。以同一份中立 ground truth 評分（`bench/ccq_adapter.sh`，可複現；raw 在 `results/wpa/ccq-scorecard.md`）。
+
+| 維度 | **ccq** | CodeGraph | cbm |
+|---|---|---|---|
+| **直接呼叫圖召回**（vs cflow, 3 檔） | **27/28 (96%)** | 26/28 (93%) | 0/28 (0%) |
+| **函式指標 `.scan2` 分派召回** | **5/5 (100%)** | 3/5 (60%) | 0/5 (0%) |
+| 呼叫邊粒度（函式級佔比） | **100%** | 100% | 1.0% |
+| 索引耗時（wpa 620 檔） | 22.9s（no-build, clangd） | 14.0s | 4.2s |
+| 需不需 build | 需 `compile_flags.txt`（`ccq init` 自動產）或 `compile_commands.json` | 免 | 免 |
+
+**結論**：ccq 在「呼叫關係」這一維**同時勝過** CodeGraph 與 cbm——**函式指標召回 5/5（唯一全中；靠 clangd 之外的純文字 #ifdef-blind 合成，連 CodeGraph 漏掉的 bsd/ndis 平台 driver 都抓到）**，直接呼叫圖 96% 也略高於 CodeGraph（clangd call hierarchy，天生函式級）。**代價**：需要 `compile_flags.txt`（一鍵 `ccq init` 自動產）且索引較慢（clangd 走真 TU）。取捨很清楚：**要「誰呼叫誰 / 函式指標分派」的精度就用 ccq；要零 setup 的廣度/巨集/Cypher/UI 就用 cbm/CodeGraph**。
+
+---
+
 ## 1. 每個工具的使用步驟（可照抄）
 
 ### CodeGraph
