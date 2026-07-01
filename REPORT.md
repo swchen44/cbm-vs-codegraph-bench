@@ -193,6 +193,46 @@ flowchart LR
 
 ---
 
+## 3.7 追查：cbm 直接呼叫圖 0% 的原始碼級根因與可修性（2026-07）
+
+> 讀 cbm 原始碼（`win4r/codebase-memory-mcp-pro`）+ 查它自己產的 SQLite，把「函式級呼叫圖 0%」的根因釘到程式碼行。**結論先講：不是 crash bug，是「呼叫邊來源歸錯」的屬性缺陷；架構本來就支援函式級，屬可修的 QN 一致性問題，但那是上游 DeusData 引擎的事。**
+
+### 機制：CALLS 邊的來源是「enclosing 函式，否則退回檔案」
+`src/pipeline/pass_calls.c:320 calls_find_source()`：
+```c
+// Find source node for a call: enclosing function or file node.
+if (enclosing_qn) src = find_by_qn(enclosing_qn);          // ① 優先：enclosing 函式
+if (!src) { fqn = ..."__file__"; src = find_by_qn(fqn); }  // ② fallback：檔案(Module)
+```
+C 幾乎全部掉進 ② → 來源變「檔案」。
+
+### DB 實測佐證（`results/raw/full/cbm-cache/...wpa_supplicant.db`）
+| 事實 | 數字 |
+|---|---|
+| Function 節點存在嗎 | **9125 個** |
+| `eloop_destroy` 是 Function 節點嗎 | 是（甚至**重複兩個**） |
+| CALLS 邊來源 label | **Module（檔案）14813（99.0%）** / Function 110 / Method 35 |
+
+→ **函式節點明明都在，但 99% 的 CALLS 邊來源掛在「檔案」**。與 §3.5 的「函式級僅 1%」一致。
+
+### 根因：QN 對不上（不是「沒抓到 enclosing 函式」）
+`internal/cbm/helpers.c:700 cbm_find_enclosing_func()` 對 C **有處理**（`CBM_LANG_C → func_kinds_cpp = {"function_definition"}`，正是 C 的 tree-sitter 節點），所以 enclosing 函式找得到、QN 也算得出。但 `find_by_qn(enclosing_qn)` 仍 NULL → 掉檔案，代表**呼叫 pass 算出的 enclosing 函式 QN，對不上「定義 pass 建函式節點時用的 QN」**。`eloop_destroy` 出現兩個節點（宣告 vs 定義，QN 不同）就是強線索。
+
+### 要改哪裡 / 改得出嗎
+可修（有界 debug，非重寫）。讓三處 QN 一致：
+- `internal/cbm/helpers.c`（`cbm_enclosing_func_qn`，呼叫點算 QN）
+- `internal/cbm/extract_defs.c`（定義 pass 建函式節點的 QN）
+- `src/pipeline/fqn.c`（共用 QN 工具）
+
+做法：對一條已知邊（`eloop_destroy → eloop_remove_timeout`）印出兩邊 QN 對比、找分歧、對齊，順手去重複節點。
+
+### 但要提醒
+1. 這是**上游 DeusData 引擎**（22.8k 星）的 bug，最乾淨是**回報 upstream**，不是 fork 自己扛幾十萬行 C。
+2. 就算修好拿回函式級呼叫圖，cbm 的 C 仍是 tree-sitter：**不展開 macro（0.58 品質）、不評估 `#ifdef`**，離 clangd 級精度還有一段。
+3. **ccq 這塊天生就對**（clangd call hierarchy 本來就是函式級），所以「為了函式級呼叫圖去 fork cbm 修」CP 值低——再次支持「深耕 ccq」。
+
+---
+
 ## 4. 真實優缺點（實跑後，非文獻推論）
 
 ### CodeGraph
