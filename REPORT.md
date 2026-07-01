@@ -233,6 +233,24 @@ C 幾乎全部掉進 ② → 來源變「檔案」。
 
 ---
 
+## 3.8 視覺化 / UI 對照（2026-07,讀 cbm 原始碼）
+
+三個工具的「看圖」做法哲學不同:
+
+| | **cbm graph-ui** | **CodeGraph** | **ccq** |
+|---|---|---|---|
+| 形式 | **3D 互動**(React 19 + Three.js/`@react-three/fiber` + Tailwind) | 自帶互動式 HTML 圖(離線) | `export --format html`:**2D 力導向、單一靜態 HTML**(vanilla-JS SVG) |
+| 怎麼服務 | **C binary 自己起 HTTP server**(`src/ui/http_server.c`,`localhost:9749`):`GET /` 內嵌 index.html、`POST /rpc` 打 MCP 工具(含 Cypher)、`GET/POST /api/...`(layout/index/browse/logs/processes) | `codegraph.db` + 產出的 HTML | 產一個檔,瀏覽器直接開 |
+| 互動能力 | **三合一**:3D 探索(過濾、hover tooltip、點看細節)+ 控制台(觸發索引、看 log/processes)+ Cypher 查詢 | 瀏覽 + 少量互動 | 純瀏覽(拖曳/hover);fnptr 邊虛線 |
+| 相依/發佈 | 要 **Node.js** build React app,再**內嵌**進 C binary(`make cbm-with-ui`,預設 stub 無 UI;`--ui` 變體);另需 libgit2 等 | `npm i -g` | **零依賴、離線、開檔即用** |
+| 本質 | 一個**執行中的 3D dashboard app** | 一個 graph 產物 | 一個**可攜的靜態產物** |
+
+主要元件(`graph-ui/src`,16 個 .tsx):`GraphScene`/`NodeCloud`(3D 點雲)/`EdgeLines`/`NodeLabels`/`NodeTooltip`/`NodeDetailPanel`/`FilterPanel`/`ControlTab`/`StatsTab`。
+
+**結論**:UI 這一維 **cbm 明顯領先**(live 3D dashboard + 控制台 + Cypher),是它 fork 值最高的差異化之一;ccq 走「單一離線 HTML」極簡路線(零依賴可攜)。若要 cbm 那種 live 3D 體驗,最自然是**互通**——ccq 產邊(`export --format json`)→ 灌進一個現成 3D 圖 UI,而非在 ccq 內重造 server UI(見 `~/git/ccq/docs/` 的互通研究)。
+
+---
+
 ## 4. 真實優缺點（實跑後，非文獻推論）
 
 ### CodeGraph
